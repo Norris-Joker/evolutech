@@ -6,50 +6,9 @@
   <title>Album Mariage Partagé 💍</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
-    #gallery {
-      display: grid;
-      grid-template-columns: repeat(auto-fill,minmax(150px,1fr));
-      gap: 10px;
-      margin-top: 20px;
-    }
-    .media-wrapper {
-      position: relative;
-      border: 1px solid #ddd;
-      padding: 5px;
-      border-radius: 8px;
-      background: white;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    }
-    .media-wrapper img,
-    .media-wrapper video {
-      width: 100%;
-      border-radius: 8px;
-      display: block;
-    }
-    .user-info {
-      position: absolute;
-      top: 8px;
-      left: 8px;
-      background: rgba(0,0,0,0.5);
-      color: white;
-      padding: 4px 8px;
-      border-radius: 20px;
-      font-size: 0.85rem;
-      font-weight: 600;
-      display: flex;
-      align-items: center;
-      backdrop-filter: blur(5px);
-      user-select: none;
-      pointer-events: none;
-    }
-    .user-info img {
-      width: 28px;
-      height: 28px;
-      border-radius: 50%;
-      object-fit: cover;
-      margin-right: 8px;
-      border: 2px solid white;
-    }
+    #gallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap: 10px; margin-top: 20px; }
+    .media-wrapper img, .media-wrapper video { width: 100%; border-radius: 8px; }
+    .media-wrapper { border: 1px solid #ddd; padding: 5px; border-radius: 8px; }
   </style>
 </head>
 <body>
@@ -57,87 +16,44 @@
 <h1>Album Mariage Partagé 💍</h1>
 
 <input type="file" id="file-upload" accept="image/*,video/*" multiple />
-<button id="upload-btn">Uploader</button>
+<button id="upload-btn">📤 Uploader</button>
 
 <div id="gallery"></div>
 
 <script>
-  // Récupération infos utilisateur depuis localStorage ou valeurs par défaut
-  const user = JSON.parse(localStorage.getItem('user')) || {
-    prenom: 'Invité',
-    nom: '',
-    photo: 'https://via.placeholder.com/28?text=?'
-  };
-
   const cloudName = 'dzfc5vwo0';
-  const uploadPreset = 'album_mariage_unsigned'; // Ton preset unsigned Cloudinary
+  const uploadPreset = 'album_mariage_unsigned'; // ton preset unsigned
 
-  const backendUrl = 'http://192.168.1.37:3000'; // Ton backend Node.js
-
+  const gallery = document.getElementById('gallery');
   const fileUpload = document.getElementById('file-upload');
   const uploadBtn = document.getElementById('upload-btn');
-  const gallery = document.getElementById('gallery');
-
-  let mediaList = [];
 
   async function loadGallery() {
     try {
-      const response = await fetch(`${backendUrl}/gallery`);
+      const response = await fetch(`https://res.cloudinary.com/${cloudName}/image/list/album_mariage.json`);
       const data = await response.json();
-      mediaList = data;
-      renderGallery();
-    } catch (e) {
-      console.error('Erreur lors du chargement de la galerie', e);
-      gallery.innerHTML = '<p>Impossible de charger la galerie.</p>';
-    }
-  }
 
-  function renderGallery() {
-    gallery.innerHTML = '';
-    mediaList.forEach(url => {
-      const wrapper = document.createElement('div');
-      wrapper.className = 'media-wrapper';
+      gallery.innerHTML = ''; // vide la galerie
+      data.resources.forEach(file => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'media-wrapper';
 
-      // Création de la div user-info
-      const userInfo = document.createElement('div');
-      userInfo.className = 'user-info';
+        if (file.resource_type === 'image') {
+          const img = document.createElement('img');
+          img.src = file.secure_url;
+          wrapper.appendChild(img);
+        } else if (file.resource_type === 'video') {
+          const video = document.createElement('video');
+          video.src = file.secure_url;
+          video.controls = true;
+          wrapper.appendChild(video);
+        }
 
-      const userImg = document.createElement('img');
-      userImg.src = user.photo;
-      userImg.alt = `${user.prenom} ${user.nom}`;
-
-      const userName = document.createElement('span');
-      userName.textContent = `${user.prenom} ${user.nom}`;
-
-      userInfo.appendChild(userImg);
-      userInfo.appendChild(userName);
-
-      // Création du média
-      if (url.match(/\.(mp4|webm|ogg)$/i)) {
-        const video = document.createElement('video');
-        video.src = url;
-        video.controls = true;
-        wrapper.appendChild(video);
-      } else {
-        const img = document.createElement('img');
-        img.src = url;
-        wrapper.appendChild(img);
-      }
-
-      wrapper.appendChild(userInfo);
-      gallery.appendChild(wrapper);
-    });
-  }
-
-  async function sendUrlToBackend(url) {
-    try {
-      await fetch(`${backendUrl}/upload-url`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url }),
+        gallery.appendChild(wrapper);
       });
     } catch (error) {
-      console.error('Erreur lors de l\'envoi de l\'URL au backend', error);
+      console.error('Erreur en chargeant la galerie :', error);
+      gallery.innerHTML = '<p>Impossible de charger la galerie.</p>';
     }
   }
 
@@ -152,25 +68,26 @@
         body: formData
       });
       const data = await response.json();
-      console.log('Upload réussi:', data.secure_url);
-      await sendUrlToBackend(data.secure_url);
+      console.log('Upload réussi :', data.secure_url);
+
+      // Recharge la galerie après upload
       await loadGallery();
     } catch (error) {
-      alert('Erreur lors de l\'upload');
-      console.error(error);
+      console.error('Erreur upload :', error);
+      alert("Échec de l'upload");
     }
   }
 
   uploadBtn.addEventListener('click', () => {
     const files = fileUpload.files;
     if (!files.length) {
-      alert('Choisis au moins un fichier à uploader');
+      alert('Choisissez au moins un fichier à uploader');
       return;
     }
     for (const file of files) {
       uploadFile(file);
     }
-    fileUpload.value = ''; // reset input
+    fileUpload.value = '';
   });
 
   // Charge la galerie au démarrage

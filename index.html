@@ -5,58 +5,84 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Album Mariage Partagé 💍</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    #gallery { display: grid; grid-template-columns: repeat(auto-fill,minmax(150px,1fr)); gap: 10px; margin-top: 20px; }
+    body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; }
+    h1 { text-align: center; color: #333; }
+    #gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; margin-top: 20px; }
     .media-wrapper img, .media-wrapper video { width: 100%; border-radius: 8px; }
-    .media-wrapper { border: 1px solid #ddd; padding: 5px; border-radius: 8px; }
+    .media-wrapper { border: 1px solid #ddd; padding: 5px; border-radius: 8px; background: white; }
+    .upload-zone { text-align: center; margin-top: 20px; }
   </style>
 </head>
 <body>
 
 <h1>Album Mariage Partagé 💍</h1>
 
-<input type="file" id="file-upload" accept="image/*,video/*" multiple />
-<button id="upload-btn">📤 Uploader</button>
+<div class="upload-zone">
+  <input type="file" id="file-upload" accept="image/*,video/*" multiple />
+  <button id="upload-btn">📤 Uploader</button>
+</div>
 
 <div id="gallery"></div>
 
 <script>
   const cloudName = 'dzfc5vwo0';
-  const uploadPreset = 'album_mariage_unsigned'; // ton preset unsigned
+  const uploadPreset = 'album_mariage_unsigned'; // Le nom du preset Cloudinary
+  const backendUrl = 'http://192.168.1.37:3000'; // Remplace par ton IP locale si besoin
 
-  const gallery = document.getElementById('gallery');
   const fileUpload = document.getElementById('file-upload');
   const uploadBtn = document.getElementById('upload-btn');
+  const gallery = document.getElementById('gallery');
 
+  let mediaList = [];
+
+  // Charge la galerie depuis ton backend
   async function loadGallery() {
     try {
-      const response = await fetch(`https://res.cloudinary.com/${cloudName}/image/list/album_mariage.json`);
-      const data = await response.json();
-
-      gallery.innerHTML = ''; // vide la galerie
-      data.resources.forEach(file => {
-        const wrapper = document.createElement('div');
-        wrapper.className = 'media-wrapper';
-
-        if (file.resource_type === 'image') {
-          const img = document.createElement('img');
-          img.src = file.secure_url;
-          wrapper.appendChild(img);
-        } else if (file.resource_type === 'video') {
-          const video = document.createElement('video');
-          video.src = file.secure_url;
-          video.controls = true;
-          wrapper.appendChild(video);
-        }
-
-        gallery.appendChild(wrapper);
-      });
-    } catch (error) {
-      console.error('Erreur en chargeant la galerie :', error);
+      const response = await fetch(`${backendUrl}/gallery`);
+      mediaList = await response.json();
+      renderGallery();
+    } catch (e) {
+      console.error('Erreur en chargeant la galerie :', e);
       gallery.innerHTML = '<p>Impossible de charger la galerie.</p>';
     }
   }
 
+  // Affiche tous les médias
+  function renderGallery() {
+    gallery.innerHTML = '';
+    mediaList.forEach(url => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'media-wrapper';
+
+      if (url.match(/\.(mp4|webm|ogg)$/i)) {
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        wrapper.appendChild(video);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        wrapper.appendChild(img);
+      }
+
+      gallery.appendChild(wrapper);
+    });
+  }
+
+  // Envoie l'URL du média uploadé à ton backend
+  async function sendUrlToBackend(url) {
+    try {
+      await fetch(`${backendUrl}/upload-url`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+    } catch (e) {
+      console.error("Erreur lors de l'envoi de l'URL au backend", e);
+    }
+  }
+
+  // Upload vers Cloudinary
   async function uploadFile(file) {
     const formData = new FormData();
     formData.append('file', file);
@@ -68,29 +94,31 @@
         body: formData
       });
       const data = await response.json();
-      console.log('Upload réussi :', data.secure_url);
+      const url = data.secure_url;
 
-      // Recharge la galerie après upload
-      await loadGallery();
+      console.log('Upload réussi:', url);
+      await sendUrlToBackend(url);
+      await loadGallery(); // recharge la galerie avec la nouvelle photo
     } catch (error) {
-      console.error('Erreur upload :', error);
-      alert("Échec de l'upload");
+      alert("Erreur lors de l'upload.");
+      console.error(error);
     }
   }
 
+  // Quand on clique sur le bouton "Uploader"
   uploadBtn.addEventListener('click', () => {
     const files = fileUpload.files;
     if (!files.length) {
-      alert('Choisissez au moins un fichier à uploader');
+      alert('Choisis au moins un fichier à uploader');
       return;
     }
     for (const file of files) {
       uploadFile(file);
     }
-    fileUpload.value = '';
+    fileUpload.value = ''; // reset input
   });
 
-  // Charge la galerie au démarrage
+  // Au chargement
   loadGallery();
 </script>
 
